@@ -20,7 +20,7 @@ jobs:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             v8_from_source: "1"
-            v8_gn_args: v8_monolithic_for_shared_library=true enable_rust=false
+            v8_gn_args: v8_monolithic_for_shared_library=true
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
           - os: windows-2025
@@ -51,6 +51,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libglib2.0-dev libclang-dev
+
+      - name: Patch Linux V8 source package
+        if: ${{ matrix.v8_from_source == '1' }}
+        run: |
+          cargo fetch --target ${{ matrix.target }}
+          V8_DIR="$(find "${CARGO_HOME:-$HOME/.cargo}/registry/src" -type d -name 'v8-145.0.0' -print -quit)"
+          test -n "$V8_DIR"
+          mkdir -p "$V8_DIR/build/rust"
+          printf '%s\n' x86_64-unknown-linux-gnu > "$V8_DIR/build/rust/known-target-triples.txt"
 
       - name: Build native binding
         env:
