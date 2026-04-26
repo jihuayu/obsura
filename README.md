@@ -4,14 +4,6 @@ A lightweight, embeddable headless browser for AI agents and web scraping, built
 
 `node-obscura` packages Obscura as a Node.js library with a lightweight scrape API and a Puppeteer-compatible transport, so agents and scraping tools can run browser workflows without managing a separate browser process.
 
-Credit for the browser engine and core implementation belongs to the upstream [Obscura](https://github.com/h4ckf0r0day/obscura) project. This package provides Node.js bindings, packaging, and compatibility patches around a pinned upstream commit.
-
-Pinned upstream commit:
-
-```text
-99e75f1e62930f864302db9c4d18e91e7ee3f0bd
-```
-
 ## Install
 
 ```bash
@@ -89,6 +81,12 @@ try {
 
 This repository does not vendor Obscura upstream source code. During setup it downloads the pinned upstream commit into `vendor/obscura`, applies the compatibility patches in `patches/`, and builds the local native addon.
 
+Pinned upstream commit:
+
+```text
+99e75f1e62930f864302db9c4d18e91e7ee3f0bd
+```
+
 ### Requirements
 
 - Node.js 18+
@@ -128,4 +126,4 @@ The upstream repository and pinned commit are stored in `obscura-source.json`.
 
 ## Credits
 
-`node-obscura` is built on top of [Obscura](https://github.com/h4ckf0r0day/obscura). Please credit the upstream project when using or redistributing this package.
+Credit for the browser engine and core implementation belongs to the upstream [Obscura](https://github.com/h4ckf0r0day/obscura) project. This package provides Node.js bindings, packaging, and compatibility patches around a pinned upstream commit.
