@@ -1,6 +1,6 @@
 export type WaitUntil = 'load' | 'domcontentloaded' | 'networkidle0'
 
-export interface FetchOptions {
+export interface ScrapeOptions {
   waitUntil?: WaitUntil
   selector?: string
   timeoutMs?: number
@@ -11,22 +11,23 @@ export interface FetchOptions {
   includeText?: boolean
   includeLinks?: boolean
   includeMarkdown?: boolean
+  includeHtml?: boolean
   contentSelector?: string
 }
 
-export interface FetchLink {
+export interface ScrapeLink {
   url: string
   text: string
 }
 
-export interface FetchResult {
+export interface ScrapeResult {
   url: string
   finalUrl: string
   status?: number
   title: string
-  html: string
+  html?: string
   text?: string
-  links?: FetchLink[]
+  links?: ScrapeLink[]
   markdown?: string
   eval?: unknown
   timing: {
@@ -34,7 +35,7 @@ export interface FetchResult {
   }
 }
 
-export function fetch(url: string, options?: FetchOptions): Promise<FetchResult>
+export function scrape(url: string, options?: ScrapeOptions): Promise<ScrapeResult>
 
 export interface PuppeteerTransportOptions {
   proxy?: string

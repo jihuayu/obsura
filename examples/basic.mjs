@@ -1,18 +1,13 @@
-import { pathToFileURL } from 'node:url'
-import { join } from 'node:path'
 import obscura from '../index.js'
 
-const { fetch } = obscura
+const { scrape } = obscura
 
-const url =
-  process.argv[2] ??
-  pathToFileURL(join(process.cwd(), 'test', 'fixtures', 'static.html')).href
+const url = process.argv[2] ?? 'https://example.com'
 
-const page = await fetch(url, {
+const page = await scrape(url, {
   waitUntil: 'load',
-  includeText: true,
   includeLinks: true,
-  includeMarkdown: true,
+  includeHtml: true,
   eval: 'document.title',
 })
 

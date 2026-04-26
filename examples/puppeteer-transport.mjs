@@ -1,5 +1,3 @@
-import { pathToFileURL } from 'node:url'
-import { join } from 'node:path'
 import puppeteer from 'puppeteer-core'
 import obscura from '../index.js'
 
@@ -13,9 +11,7 @@ const browser = await puppeteer.connect({
 
 try {
   const page = await browser.newPage()
-  const url =
-    process.argv[2] ??
-    pathToFileURL(join(process.cwd(), 'test', 'fixtures', 'static.html')).href
+  const url = process.argv[2] ?? 'https://example.com'
 
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   console.log(await page.title())

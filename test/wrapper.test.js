@@ -32,7 +32,7 @@ function createMockBinding() {
 
   return {
     binding: {
-      fetch: async () => JSON.stringify({ ok: true }),
+      scrape: async () => JSON.stringify({ ok: true }),
       NativeCdpSession,
     },
     sessions,
@@ -43,7 +43,8 @@ test('exports public wrapper API', () => {
   const { binding } = createMockBinding()
   const api = createExports(binding)
 
-  assert.equal(typeof api.fetch, 'function')
+  assert.equal(typeof api.scrape, 'function')
+  assert.equal(api.fetch, undefined)
   assert.equal(typeof api.createPuppeteerTransport, 'function')
 
   const transport = api.createPuppeteerTransport()
@@ -55,17 +56,17 @@ test('exports public wrapper API', () => {
   assert.equal(transport.onerror, undefined)
 })
 
-test('fetch parses native JSON result', async () => {
+test('scrape parses native JSON result', async () => {
   const calls = []
   const api = createExports({
-    fetch: async (url, options) => {
+    scrape: async (url, options) => {
       calls.push({ url, options })
       return JSON.stringify({ url, nested: { ok: true } })
     },
     NativeCdpSession: class {},
   })
 
-  const result = await api.fetch('file:///tmp/page.html', { includeText: true })
+  const result = await api.scrape('file:///tmp/page.html', { includeText: true })
 
   assert.deepEqual(calls, [
     {
@@ -79,23 +80,23 @@ test('fetch parses native JSON result', async () => {
   })
 })
 
-test('fetch rejects native errors and invalid native JSON', async () => {
+test('scrape rejects native errors and invalid native JSON', async () => {
   const nativeError = new Error('native failed')
   const apiWithNativeError = createExports({
-    fetch: async () => {
+    scrape: async () => {
       throw nativeError
     },
     NativeCdpSession: class {},
   })
 
-  await assert.rejects(() => apiWithNativeError.fetch('https://example.com'), nativeError)
+  await assert.rejects(() => apiWithNativeError.scrape('https://example.com'), nativeError)
 
   const apiWithBadJson = createExports({
-    fetch: async () => '{bad json',
+    scrape: async () => '{bad json',
     NativeCdpSession: class {},
   })
 
-  await assert.rejects(() => apiWithBadJson.fetch('https://example.com'), SyntaxError)
+  await assert.rejects(() => apiWithBadJson.scrape('https://example.com'), SyntaxError)
 })
 
 test('transport forwards messages to native session and emits onmessage', () => {

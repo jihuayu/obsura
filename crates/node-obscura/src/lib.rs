@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
@@ -23,7 +23,7 @@ const CDP_TRANSPORT_CLOSE_SENTINEL: &str = "__OBSCURA_CDP_TRANSPORT_CLOSED__";
 
 #[derive(Clone)]
 #[napi(object)]
-pub struct FetchOptions {
+pub struct ScrapeOptions {
     pub waitUntil: Option<String>,
     pub selector: Option<String>,
     pub timeoutMs: Option<u32>,
@@ -34,6 +34,7 @@ pub struct FetchOptions {
     pub includeText: Option<bool>,
     pub includeLinks: Option<bool>,
     pub includeMarkdown: Option<bool>,
+    pub includeHtml: Option<bool>,
     pub contentSelector: Option<String>,
 }
 
@@ -65,8 +66,8 @@ impl NativeCdpSession {
         let (command_tx, command_rx) = mpsc::unbounded_channel::<NativeCdpCommand>();
         let closed = Arc::new(AtomicBool::new(false));
         let thread_closed = closed.clone();
-        let callback_tsfn: ThreadsafeFunction<String, ErrorStrategy::Fatal> =
-            callback.create_threadsafe_function(
+        let callback_tsfn: ThreadsafeFunction<String, ErrorStrategy::Fatal> = callback
+            .create_threadsafe_function(
                 0,
                 |ctx: ThreadSafeCallContext<String>| -> Result<Vec<JsString>> {
                     Ok(vec![ctx.env.create_string(&ctx.value)?])
@@ -198,19 +199,19 @@ async fn run_native_cdp_session(
 }
 
 #[napi]
-pub fn fetch(url: String, options: Option<FetchOptions>) -> AsyncTask<FetchTask> {
-    AsyncTask::new(FetchTask {
+pub fn scrape(url: String, options: Option<ScrapeOptions>) -> AsyncTask<ScrapeTask> {
+    AsyncTask::new(ScrapeTask {
         url,
         options: options.unwrap_or_default(),
     })
 }
 
-pub struct FetchTask {
+pub struct ScrapeTask {
     url: String,
-    options: FetchOptions,
+    options: ScrapeOptions,
 }
 
-impl Task for FetchTask {
+impl Task for ScrapeTask {
     type Output = String;
     type JsValue = String;
 
@@ -221,11 +222,14 @@ impl Task for FetchTask {
             .build()
             .map_err(|error| js_error(format!("failed to create runtime: {}", error)))?;
 
-        let value =
-            runtime.block_on(fetch_inner(self.url.clone(), self.options.clone(), timeout_ms))?;
+        let value = runtime.block_on(scrape_inner(
+            self.url.clone(),
+            self.options.clone(),
+            timeout_ms,
+        ))?;
 
         serde_json::to_string(&value)
-            .map_err(|error| js_error(format!("failed to serialize fetch result: {}", error)))
+            .map_err(|error| js_error(format!("failed to serialize scrape result: {}", error)))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
@@ -233,9 +237,9 @@ impl Task for FetchTask {
     }
 }
 
-async fn fetch_inner(
+async fn scrape_inner(
     url: String,
-    options: FetchOptions,
+    options: ScrapeOptions,
     timeout_ms: u32,
 ) -> Result<serde_json::Value> {
     let started = Instant::now();
@@ -243,11 +247,11 @@ async fn fetch_inner(
     let stealth = options.stealth.unwrap_or(false);
 
     let context = Arc::new(BrowserContext::with_options(
-        "node-fetch".to_string(),
+        "node-scrape".to_string(),
         options.proxy.clone(),
         stealth,
     ));
-    let mut page = Page::new("node-fetch-page".to_string(), context);
+    let mut page = Page::new("node-scrape-page".to_string(), context);
 
     if let Some(user_agent) = options.userAgent.as_deref() {
         page.http_client.set_user_agent(user_agent).await;
@@ -271,8 +275,8 @@ async fn fetch_inner(
     }
 
     if let Some(selector) = options.selector.as_deref() {
-        let found = wait_for_selector(&page, selector, Duration::from_millis(timeout_ms as u64))
-            .await;
+        let found =
+            wait_for_selector(&page, selector, Duration::from_millis(timeout_ms as u64)).await;
         if !found {
             return Err(js_error(format!(
                 "selector timeout after {}ms: {}",
@@ -281,8 +285,12 @@ async fn fetch_inner(
         }
     }
 
-    let html = extract_html(&page);
-    let text = if options.includeText.unwrap_or(false) {
+    let html = if options.includeHtml.unwrap_or(false) {
+        Some(extract_html(&page))
+    } else {
+        None
+    };
+    let text = if options.includeText.unwrap_or(true) {
         extract_text(&page)
     } else {
         None
@@ -292,7 +300,7 @@ async fn fetch_inner(
     } else {
         None
     };
-    let markdown = if options.includeMarkdown.unwrap_or(false) {
+    let markdown = if options.includeMarkdown.unwrap_or(true) {
         extract_markdown(&page, options.contentSelector.as_deref())
     } else {
         None
@@ -316,7 +324,6 @@ async fn fetch_inner(
         "url": url,
         "finalUrl": page.url_string(),
         "title": page.title,
-        "html": html,
         "timing": {
             "totalMs": started.elapsed().as_millis() as u64
         }
@@ -324,6 +331,9 @@ async fn fetch_inner(
 
     if let Some(status) = status {
         result["status"] = json!(status);
+    }
+    if let Some(html) = html {
+        result["html"] = json!(html);
     }
     if let Some(text) = text {
         result["text"] = json!(text);
@@ -341,7 +351,7 @@ async fn fetch_inner(
     Ok(result)
 }
 
-impl Default for FetchOptions {
+impl Default for ScrapeOptions {
     fn default() -> Self {
         Self {
             waitUntil: None,
@@ -354,6 +364,7 @@ impl Default for FetchOptions {
             includeText: None,
             includeLinks: None,
             includeMarkdown: None,
+            includeHtml: None,
             contentSelector: None,
         }
     }
@@ -421,9 +432,7 @@ fn extract_links(page: &Page) -> Option<Vec<serde_json::Value>> {
                 let url = if href.starts_with("http://") || href.starts_with("https://") {
                     href
                 } else if let Some(ref base) = base_url {
-                    base.join(&href)
-                        .map(|url| url.to_string())
-                        .unwrap_or(href)
+                    base.join(&href).map(|url| url.to_string()).unwrap_or(href)
                 } else {
                     href
                 };
@@ -500,7 +509,8 @@ fn dom_to_markdown(dom: &DomTree, node_id: NodeId, base_url: Option<&url::Url>) 
                 "pre" => format!("\n```\n{}\n```\n\n", children),
                 "blockquote" => format!("\n> {}\n\n", trimmed.replace('\n', "\n> ")),
                 "a" => {
-                    let href = absolutize_url(node.get_attribute("href").unwrap_or_default(), base_url);
+                    let href =
+                        absolutize_url(node.get_attribute("href").unwrap_or_default(), base_url);
                     if href.is_empty() || trimmed.is_empty() {
                         children
                     } else {
@@ -508,7 +518,8 @@ fn dom_to_markdown(dom: &DomTree, node_id: NodeId, base_url: Option<&url::Url>) 
                     }
                 }
                 "img" => {
-                    let src = absolutize_url(node.get_attribute("src").unwrap_or_default(), base_url);
+                    let src =
+                        absolutize_url(node.get_attribute("src").unwrap_or_default(), base_url);
                     let alt = node.get_attribute("alt").unwrap_or_default();
                     if src.is_empty() {
                         String::new()
@@ -528,7 +539,9 @@ fn dom_to_markdown(dom: &DomTree, node_id: NodeId, base_url: Option<&url::Url>) 
                                 NodeData::Element { name, .. }
                                     if matches!(name.local.as_ref(), "td" | "th") =>
                                 {
-                                    Some(dom_to_markdown(dom, child_id, base_url).trim().to_string())
+                                    Some(
+                                        dom_to_markdown(dom, child_id, base_url).trim().to_string(),
+                                    )
                                 }
                                 _ => None,
                             }
@@ -541,8 +554,9 @@ fn dom_to_markdown(dom: &DomTree, node_id: NodeId, base_url: Option<&url::Url>) 
                     }
                 }
                 "table" | "thead" | "tbody" | "tfoot" => format!("\n{}\n", children),
-                "div" | "section" | "article" | "main" | "aside" | "nav" | "header"
-                | "footer" => format!("\n{}", children),
+                "div" | "section" | "article" | "main" | "aside" | "nav" | "header" | "footer" => {
+                    format!("\n{}", children)
+                }
                 _ => children,
             }
         }

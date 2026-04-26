@@ -2,7 +2,7 @@
 
 A lightweight, embeddable headless browser for AI agents and web scraping, built with [Obscura](https://github.com/h4ckf0r0day/obscura).
 
-`node-obscura` packages Obscura as a Node.js library with a simple fetch API and a Puppeteer-compatible transport, so agents and scraping tools can run browser workflows without managing a separate browser process.
+`node-obscura` packages Obscura as a Node.js library with a lightweight scrape API and a Puppeteer-compatible transport, so agents and scraping tools can run browser workflows without managing a separate browser process.
 
 Credit for the browser engine and core implementation belongs to the upstream [Obscura](https://github.com/h4ckf0r0day/obscura) project. This package provides Node.js bindings, packaging, and compatibility patches around a pinned upstream commit.
 
@@ -20,22 +20,21 @@ npm install node-obscura
 
 ## Usage
 
-### Direct Fetch
+### Direct Scrape
 
 ```js
-const { fetch } = require('node-obscura')
+const { scrape } = require('node-obscura')
 
 async function main() {
-  const page = await fetch('https://example.com', {
+  const page = await scrape('https://example.com', {
     waitUntil: 'networkidle0',
-    includeText: true,
     includeLinks: true,
-    includeMarkdown: true,
     eval: 'document.title',
   })
 
   console.log(page.title)
   console.log(page.text)
+  console.log(page.markdown)
   console.log(page.links)
 }
 
@@ -44,6 +43,8 @@ main().catch(error => {
   process.exitCode = 1
 })
 ```
+
+`scrape()` is the small path for simple pages: it opens one URL, waits for the page or a selector, and returns extracted text and Markdown by default. Enable `includeHtml` or `includeLinks` when you need those heavier fields. For multi-step interactions, forms, CDP control, or full browser automation, use the Puppeteer transport instead.
 
 ### With Puppeteer
 
