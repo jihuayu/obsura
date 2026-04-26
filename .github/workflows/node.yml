@@ -71,7 +71,7 @@ jobs:
       - name: Install dependencies
         env:
           NODE_OBSCURA_SKIP_SOURCE_SETUP: "1"
-        run: npm ci
+        run: npm ci --omit=optional
 
       - name: Verify tag matches package version
         run: |
