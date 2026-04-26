@@ -11,7 +11,6 @@ crate-type = ["cdylib"]
 [features]
 default = []
 stealth = ["obscura-browser/stealth", "obscura-net/stealth"]
-linux-x64-v8-pointer-compression = ["obscura-browser/v8-pointer-compression"]
 
 [dependencies]
 obscura-browser = { path = "../../vendor/obscura/crates/obscura-browser" }
