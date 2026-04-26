@@ -61,6 +61,12 @@ switch (platform) {
     break
   case 'win32':
     switch (arch) {
+      case 'arm64':
+        nativeBinding = loadLocalOrPackage(
+          'node-obscura.win32-arm64-msvc.node',
+          'node-obscura-win32-arm64-msvc'
+        )
+        break
       case 'x64':
         nativeBinding = loadLocalOrPackage(
           'node-obscura.win32-x64-msvc.node',
