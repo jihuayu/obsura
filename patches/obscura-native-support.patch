@@ -240,3 +240,96 @@ index a4543064931218430cae0279f9b6f5f22a4e1ef9..22e4d4215219cf8efacc9fa9ed4960ba
 -}
 \ No newline at end of file
 +}
+diff --git a/crates/obscura-js/Cargo.toml b/crates/obscura-js/Cargo.toml
+index 5e6eaa2ed794c44dd77ba53c4e0f0edeea2d7eab..7f5ba95b519d30136f36d77ae5df55c6c6154065 100644
+--- a/crates/obscura-js/Cargo.toml
++++ b/crates/obscura-js/Cargo.toml
+@@ -4,12 +4,12 @@ version.workspace = true
+ edition.workspace = true
+ 
+ [build-dependencies]
+-deno_core = "0.350"
++deno_core = "0.385"
+ 
+ [dependencies]
+ obscura-dom = { workspace = true }
+ obscura-net = { workspace = true }
+-deno_core = "0.350"
++deno_core = "0.385"
+ tokio = { workspace = true }
+ serde = { workspace = true }
+ serde_json = { workspace = true }
+@@ -19,4 +19,4 @@ thiserror = { workspace = true }
+ anyhow = { workspace = true }
+ reqwest = { workspace = true }
+ html5ever = { workspace = true }
+-deno_error = "0.6"
++deno_error = "0.7"
+diff --git a/crates/obscura-js/src/module_loader.rs b/crates/obscura-js/src/module_loader.rs
+index d8457f2df65118ae544b9138404d2a6197fdba64..b11ad8b71a8f910ecf34eae3ededef12eda635f6 100644
+--- a/crates/obscura-js/src/module_loader.rs
++++ b/crates/obscura-js/src/module_loader.rs
+@@ -6,7 +6,8 @@ use deno_core::ModuleLoader;
+ use deno_core::ModuleSource;
+ use deno_core::ModuleSourceCode;
+ use deno_core::ModuleSpecifier;
+-use deno_core::RequestedModuleType;
++use deno_core::ModuleLoadOptions;
++use deno_core::ModuleLoadReferrer;
+ 
+ pub struct ObscuraModuleLoader {
+     pub base_url: String,
+@@ -21,7 +22,7 @@ impl ObscuraModuleLoader {
+ }
+ 
+ fn io_err(msg: String) -> ModuleLoaderError {
+-    std::io::Error::new(std::io::ErrorKind::Other, msg).into()
++    ModuleLoaderError::generic(msg)
+ }
+ 
+ impl ModuleLoader for ObscuraModuleLoader {
+@@ -41,15 +42,14 @@ impl ModuleLoader for ObscuraModuleLoader {
+             referrer
+         };
+ 
+-        deno_core::resolve_import(specifier, base).map_err(|e| e.into())
++        deno_core::resolve_import(specifier, base).map_err(|e| ModuleLoaderError::generic(e.to_string()))
+     }
+ 
+     fn load(
+         &self,
+         module_specifier: &ModuleSpecifier,
+-        _maybe_referrer: Option<&ModuleSpecifier>,
+-        _is_dyn_import: bool,
+-        _requested_module_type: RequestedModuleType,
++        _maybe_referrer: Option<&ModuleLoadReferrer>,
++        _options: ModuleLoadOptions,
+     ) -> ModuleLoadResponse {
+         let url = module_specifier.to_string();
+ 
+diff --git a/crates/obscura-js/src/ops.rs b/crates/obscura-js/src/ops.rs
+index 9d5c5f5adb1c384f4b2d338a33bf92afa2d8173a..e16160a3c0e04d6642323928d8722cc40e6e3f21 100644
+--- a/crates/obscura-js/src/ops.rs
++++ b/crates/obscura-js/src/ops.rs
+@@ -285,7 +285,7 @@ fn get_shared_client() -> &'static reqwest::Client {
+     })
+ }
+ 
+-#[op2(async)]
++#[op2(async(lazy), fast)]
+ #[string]
+ async fn op_fetch_url(
+     state: Rc<RefCell<OpState>>,
+diff --git a/crates/obscura-js/src/runtime.rs b/crates/obscura-js/src/runtime.rs
+index e95d1d91b428d6b23df5153d2b32aa1554720faa..9c641ab6af104ee1ffb2e6aa9c3f6bd01fd8b4be 100644
+--- a/crates/obscura-js/src/runtime.rs
++++ b/crates/obscura-js/src/runtime.rs
+@@ -668,7 +668,7 @@ impl ObscuraJsRuntime {
+         &mut self,
+         result: deno_core::v8::Global<deno_core::v8::Value>,
+     ) -> Result<serde_json::Value, String> {
+-        let scope = &mut self.runtime.handle_scope();
++        deno_core::scope!(scope, self.runtime);
+         let local = deno_core::v8::Local::new(scope, result);
+ 
+         if local.is_undefined() || local.is_null() {
