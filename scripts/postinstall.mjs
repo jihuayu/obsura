@@ -129,6 +129,8 @@ function ensureCheckout(source) {
     run("git", ["fetch", "--tags", "origin"], { cwd: checkoutDir });
   }
 
+  run("git", ["config", "core.autocrlf", "false"], { cwd: checkoutDir });
+  run("git", ["config", "core.eol", "lf"], { cwd: checkoutDir });
   run("git", ["fetch", "origin", source.commit], { cwd: checkoutDir });
   run("git", ["checkout", "--detach", source.commit], { cwd: checkoutDir });
   run("git", ["reset", "--hard", source.commit], { cwd: checkoutDir });
