@@ -1,0 +1,58 @@
+name: Node bindings
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install dependencies
+        env:
+          NODE_OBSCURA_SKIP_NATIVE_BUILD: "1"
+        run: npm install
+
+      - name: Build native binding
+        if: ${{ !matrix.cross }}
+        run: npm run build:native -- --target ${{ matrix.target }}
+
+      - name: Build native binding with cross toolchain
+        if: ${{ matrix.cross }}
+        run: npx napi build --release --platform --package node-obscura --target ${{ matrix.target }} --use-napi-cross --output-dir . --dts napi-generated.d.ts --js-package-name node-obscura
+
+      - name: Test
+        if: ${{ !matrix.cross }}
+        run: npm test

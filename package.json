@@ -1,0 +1,70 @@
+{
+  "name": "node-obscura",
+  "version": "0.1.0",
+  "description": "Node.js native bindings for the Obscura headless browser",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "lib/",
+    "crates/node-obscura/",
+    "scripts/",
+    "patches/",
+    "obscura-source.json",
+    "Cargo.toml",
+    "Cargo.lock",
+    "node-obscura.*.node",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.mjs",
+    "setup": "node scripts/postinstall.mjs",
+    "build": "npm run build:native --",
+    "build:native": "napi build --release --platform --package node-obscura --output-dir . --dts napi-generated.d.ts --js-package-name node-obscura",
+    "build:debug": "napi build --platform --package node-obscura --output-dir . --dts napi-generated.d.ts --js-package-name node-obscura",
+    "example": "node examples/basic.mjs",
+    "example:cac": "node examples/cac.mjs",
+    "example:puppeteer": "node examples/puppeteer-transport.mjs",
+    "test": "npm run setup && node --test test/*.test.js",
+    "prepublishOnly": "napi prepublish -t npm",
+    "patch:generate": "node scripts/generate-patch.mjs",
+    "patch:status": "node scripts/patch-status.mjs"
+  },
+  "napi": {
+    "binaryName": "node-obscura",
+    "packageName": "node-obscura",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "optionalDependencies": {
+    "node-obscura-darwin-arm64": "0.1.0",
+    "node-obscura-darwin-x64": "0.1.0",
+    "node-obscura-linux-arm64-gnu": "0.1.0",
+    "node-obscura-linux-x64-gnu": "0.1.0",
+    "node-obscura-win32-x64-msvc": "0.1.0"
+  },
+  "dependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.42.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "obscura",
+    "headless-browser",
+    "scraping",
+    "automation",
+    "cdp"
+  ]
+}

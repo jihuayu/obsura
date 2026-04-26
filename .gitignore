@@ -1,0 +1,14 @@
+node_modules/
+vendor/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+.npm/
+npm/
+target/
+*.tsbuildinfo
+.DS_Store
+*.node
+*.tgz
+napi-generated.d.ts

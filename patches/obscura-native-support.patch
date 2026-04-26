@@ -1,0 +1,242 @@
+diff --git a/crates/obscura-browser/src/page.rs b/crates/obscura-browser/src/page.rs
+index 94fb566664edc9e678931b685bce8e28c5e0bda0..939db984fb9900bd4ab5464d5ae6a7b379b7b2cd 100644
+--- a/crates/obscura-browser/src/page.rs
++++ b/crates/obscura-browser/src/page.rs
+@@ -664,21 +664,25 @@ impl Page {
+     }
+ 
+     pub fn evaluate(&mut self, expression: &str) -> serde_json::Value {
+-        if let Some(js) = &mut self.js {
+-            match js.evaluate(expression) {
+-                Ok(val) => val,
+-                Err(e) => {
+-                    tracing::debug!("JS eval error for '{}': {}", &expression[..expression.len().min(80)], e);
+-                    serde_json::Value::Null
+-                }
++        match self.evaluate_result(expression) {
++            Ok(val) => val,
++            Err(e) => {
++                tracing::debug!("JS eval error for '{}': {}", &expression[..expression.len().min(80)], e);
++                serde_json::Value::Null
+             }
++        }
++    }
++
++    pub fn evaluate_result(&mut self, expression: &str) -> Result<serde_json::Value, String> {
++        if let Some(js) = &mut self.js {
++            js.evaluate(expression).map_err(|e| e.to_string())
+         } else {
+             match expression.trim() {
+-                "document.title" => serde_json::Value::String(self.title.clone()),
++                "document.title" => Ok(serde_json::Value::String(self.title.clone())),
+                 "document.URL" | "document.location.href" | "window.location.href" => {
+-                    serde_json::Value::String(self.url_string())
++                    Ok(serde_json::Value::String(self.url_string()))
+                 }
+-                _ => serde_json::Value::Null,
++                _ => Err("No JS runtime".to_string()),
+             }
+         }
+     }
+diff --git a/crates/obscura-cdp/src/dispatch.rs b/crates/obscura-cdp/src/dispatch.rs
+index 47f52fc48febbabe793db6757015ddb59fa533cf..f230074dc7a5295715b10b5c597b12e3e7aa102c 100644
+--- a/crates/obscura-cdp/src/dispatch.rs
++++ b/crates/obscura-cdp/src/dispatch.rs
+@@ -135,7 +135,7 @@ pub async fn dispatch(req: &CdpRequest, ctx: &mut CdpContext) -> CdpResponse {
+         "Input" => domains::input::handle(method, &req.params, ctx, &req.session_id).await,
+         "Storage" => domains::storage::handle(method, &req.params, ctx, &req.session_id).await,
+         "LP" => domains::lp::handle(method, &req.params, ctx, &req.session_id).await,
+-        "Emulation" | "Log" | "Performance" | "Security" | "CSS"
++        "Emulation" | "Log" | "Performance" | "Security" | "CSS" | "Audits"
+         | "Accessibility" | "ServiceWorker" | "Inspector"
+         | "Debugger" | "Profiler" | "HeapProfiler" | "Overlay" => {
+             Ok(json!({}))
+diff --git a/crates/obscura-cdp/src/lib.rs b/crates/obscura-cdp/src/lib.rs
+index 2bafcdf747b339b28e382983a6ebb45f8ef61bb8..171697a839d1f92b46fe577b5226414683e35849 100644
+--- a/crates/obscura-cdp/src/lib.rs
++++ b/crates/obscura-cdp/src/lib.rs
+@@ -3,4 +3,7 @@ pub mod dispatch;
+ pub mod types;
+ pub mod domains;
+ 
+-pub use server::{start, start_with_options};
++pub use server::{
++    engine_channel, run_engine, start, start_with_options, CdpEngineHandle, CdpEngineOptions,
++    CdpEngineReceiver,
++};
+diff --git a/crates/obscura-cdp/src/server.rs b/crates/obscura-cdp/src/server.rs
+index a4543064931218430cae0279f9b6f5f22a4e1ef9..22e4d4215219cf8efacc9fa9ed4960ba0b78fd6f 100644
+--- a/crates/obscura-cdp/src/server.rs
++++ b/crates/obscura-cdp/src/server.rs
+@@ -11,6 +11,22 @@ use tracing::{error, info, warn};
+ use crate::dispatch::{self, CdpContext};
+ use crate::types::CdpRequest;
+ 
++#[derive(Clone, Debug, Default)]
++pub struct CdpEngineOptions {
++    pub proxy: Option<String>,
++    pub stealth: bool,
++    pub user_agent: Option<String>,
++}
++
++#[derive(Clone)]
++pub struct CdpEngineHandle {
++    tx: mpsc::UnboundedSender<ServerMessage>,
++}
++
++pub struct CdpEngineReceiver {
++    rx: mpsc::UnboundedReceiver<ServerMessage>,
++}
++
+ struct CdpMessage {
+     text: String,
+     reply_tx: mpsc::UnboundedSender<String>,
+@@ -21,6 +37,38 @@ enum ServerMessage {
+     NewConnection {
+         reply_tx: mpsc::UnboundedSender<String>,
+     },
++    Shutdown,
++}
++
++pub fn engine_channel() -> (CdpEngineHandle, CdpEngineReceiver) {
++    let (tx, rx) = mpsc::unbounded_channel::<ServerMessage>();
++    (CdpEngineHandle { tx }, CdpEngineReceiver { rx })
++}
++
++impl CdpEngineHandle {
++    pub fn send_cdp(
++        &self,
++        text: String,
++        reply_tx: mpsc::UnboundedSender<String>,
++    ) -> Result<(), String> {
++        self.tx
++            .send(ServerMessage::Cdp(CdpMessage { text, reply_tx }))
++            .map_err(|_| "CDP engine is closed".to_string())
++    }
++
++    pub fn new_connection(&self, reply_tx: mpsc::UnboundedSender<String>) -> Result<(), String> {
++        self.tx
++            .send(ServerMessage::NewConnection { reply_tx })
++            .map_err(|_| "CDP engine is closed".to_string())
++    }
++
++    pub fn shutdown(&self) {
++        let _ = self.tx.send(ServerMessage::Shutdown);
++    }
++}
++
++pub async fn run_engine(receiver: CdpEngineReceiver, options: CdpEngineOptions) {
++    cdp_processor(receiver.rx, options).await
+ }
+ 
+ pub async fn start(port: u16) -> anyhow::Result<()> {
+@@ -44,17 +92,24 @@ pub async fn start_with_options(
+     let local = tokio::task::LocalSet::new();
+     local
+         .run_until(async {
+-            let (msg_tx, msg_rx) = mpsc::unbounded_channel::<ServerMessage>();
+-
+-            let processor_handle = tokio::task::spawn_local(cdp_processor(msg_rx, proxy, stealth));
++            let (engine, receiver) = engine_channel();
++
++            let processor_handle = tokio::task::spawn_local(run_engine(
++                receiver,
++                CdpEngineOptions {
++                    proxy,
++                    stealth,
++                    user_agent: None,
++                },
++            ));
+ 
+             loop {
+                 match listener.accept().await {
+                     Ok((stream, peer_addr)) => {
+                         info!("New connection from {}", peer_addr);
+-                        let tx = msg_tx.clone();
++                        let engine = engine.clone();
+                         tokio::task::spawn_local(async move {
+-                            if let Err(e) = handle_connection(stream, port, tx).await {
++                            if let Err(e) = handle_connection(stream, port, engine).await {
+                                 if !format!("{}", e).contains("close") {
+                                     error!("Connection error from {}: {}", peer_addr, e);
+                                 }
+@@ -70,10 +125,12 @@ pub async fn start_with_options(
+ 
+ async fn cdp_processor(
+     mut rx: mpsc::UnboundedReceiver<ServerMessage>,
+-    proxy: Option<String>,
+-    stealth: bool,
++    options: CdpEngineOptions,
+ ) {
+-    let mut ctx = CdpContext::new_with_options(proxy, stealth);
++    let mut ctx = CdpContext::new_with_options(options.proxy, options.stealth);
++    if let Some(user_agent) = options.user_agent.as_deref() {
++        ctx.default_context.http_client.set_user_agent(user_agent).await;
++    }
+     let (itx, irx) = mpsc::unbounded_channel::<obscura_js::ops::InterceptedRequest>();
+     ctx.intercept_tx = Some(itx);
+     let mut intercept_rx: Option<mpsc::UnboundedReceiver<obscura_js::ops::InterceptedRequest>> = Some(irx);
+@@ -87,6 +144,7 @@ async fn cdp_processor(
+                         .to_string(),
+                 );
+             }
++            ServerMessage::Shutdown => break,
+             ServerMessage::Cdp(cdp_msg) => {
+                 let is_navigation = cdp_msg.text.contains("Page.navigate");
+                 let has_interception = ctx.fetch_intercept.enabled;
+@@ -309,6 +367,7 @@ async fn process_with_interception(
+             Some(msg) = rx.recv() => {
+                 tracing::info!("INTERCEPTION select: received CDP message during navigation");
+                 match msg {
++                    ServerMessage::Shutdown => return,
+                     ServerMessage::NewConnection { reply_tx: new_tx } => {
+                         let pid = ctx.create_page();
+                         let sid = format!("{}-session", pid);
+@@ -474,7 +533,7 @@ fn fast_path_response(text: &str) -> Option<String> {
+         "Runtime.runIfWaitingForDebugger" | "Runtime.discardConsoleEntries" |
+         "Performance.enable" | "Log.enable" | "Security.enable" |
+         "Emulation.setDeviceMetricsOverride" | "Emulation.setTouchEmulationEnabled" |
+-        "CSS.enable" | "Accessibility.enable" | "ServiceWorker.enable" |
++        "CSS.enable" | "Audits.enable" | "Accessibility.enable" | "ServiceWorker.enable" |
+         "Inspector.enable" | "Debugger.enable" | "Profiler.enable" |
+         "HeapProfiler.enable" | "Overlay.enable" | "Storage.enable" |
+         "Target.setAutoAttach" => {
+@@ -514,7 +573,7 @@ fn check_pending_navigation(ctx: &CdpContext, session_id: &Option<String>) -> Op
+ async fn handle_connection(
+     stream: TcpStream,
+     port: u16,
+-    msg_tx: mpsc::UnboundedSender<ServerMessage>,
++    engine: CdpEngineHandle,
+ ) -> anyhow::Result<()> {
+     let mut buf = [0u8; 4];
+     stream.peek(&mut buf).await?;
+@@ -539,9 +598,7 @@ async fn handle_connection(
+ 
+     let (reply_tx, mut reply_rx) = mpsc::unbounded_channel::<String>();
+ 
+-    let _ = msg_tx.send(ServerMessage::NewConnection {
+-        reply_tx: reply_tx.clone(),
+-    });
++    let _ = engine.new_connection(reply_tx.clone());
+     if let Some(init_msg) = reply_rx.recv().await {
+         tracing::debug!("Connection init: {}", &init_msg[..init_msg.len().min(100)]);
+     }
+@@ -581,10 +638,7 @@ async fn handle_connection(
+                 if let Some(resp) = fast_path_response(&text) {
+                     let _ = reply_tx.send(resp);
+                 } else {
+-                    let _ = msg_tx.send(ServerMessage::Cdp(CdpMessage {
+-                        text: text.to_string(),
+-                        reply_tx: reply_tx.clone(),
+-                    }));
++                    let _ = engine.send_cdp(text.to_string(), reply_tx.clone());
+                 }
+             }
+             Message::Close(_) => {
+@@ -637,4 +691,4 @@ async fn handle_http_json(stream: TcpStream, port: u16, endpoint: &str) -> anyho
+     stream.write_all(resp.as_bytes()).await?;
+     stream.flush().await?;
+     Ok(())
+-}
+\ No newline at end of file
++}
