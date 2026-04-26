@@ -35,7 +35,7 @@
     "example": "node examples/basic.mjs",
     "example:cac": "node examples/cac.mjs",
     "example:puppeteer": "node examples/puppeteer-transport.mjs",
-    "test": "npm run setup && node --test test/*.test.js",
+    "test": "npm run setup && node scripts/run-tests.mjs",
     "prepublishOnly": "napi prepublish -t npm",
     "patch:generate": "node scripts/generate-patch.mjs",
     "patch:status": "node scripts/patch-status.mjs"
