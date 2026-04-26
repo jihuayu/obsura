@@ -19,6 +19,8 @@ jobs:
             target: x86_64-apple-darwin
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            v8_from_source: "1"
+            v8_gn_args: v8_monolithic_for_shared_library=true enable_rust=false
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
           - os: windows-2025

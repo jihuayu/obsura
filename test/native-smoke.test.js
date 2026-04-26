@@ -31,7 +31,7 @@ test('native scrape returns optional html, links, scoped markdown, selector, and
 
   assert.equal(typeof result.html, 'string')
   assert.match(result.html, /<!DOCTYPE html>/)
-  assert.deepEqual(result.links, [{ url: 'file:///docs', text: 'Docs' }])
+  assert.deepEqual(result.links, [{ url: new URL('/docs', fixtureUrl).href, text: 'Docs' }])
   assert.match(result.markdown, /Fixture Heading/)
   assert.doesNotMatch(result.markdown, /Obscura Node Fixture/)
   assert.equal(result.eval, 'Obscura Node Fixture')
