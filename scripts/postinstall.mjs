@@ -123,7 +123,7 @@ function ensureCheckout(source) {
 
   if (!existsSync(join(checkoutDir, ".git"))) {
     rmSync(checkoutDir, { recursive: true, force: true });
-    run("git", ["clone", source.repo, checkoutDir]);
+    run("git", ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "clone", source.repo, checkoutDir]);
   } else {
     run("git", ["remote", "set-url", "origin", source.repo], { cwd: checkoutDir });
     run("git", ["fetch", "--tags", "origin"], { cwd: checkoutDir });
@@ -152,7 +152,7 @@ function applyPatches(patchNames) {
     if (!existsSync(patchPath)) {
       throw new Error(`Patch listed in patches/series does not exist: ${patchName}`);
     }
-    run("git", ["apply", patchPath], { cwd: checkoutDir });
+    run("git", ["apply", "--ignore-space-change", "--ignore-whitespace", patchPath], { cwd: checkoutDir });
   }
 }
 

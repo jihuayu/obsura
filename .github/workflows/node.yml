@@ -19,6 +19,8 @@ jobs:
             target: x86_64-apple-darwin
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            v8_from_source: "1"
+            v8_gn_args: v8_monolithic_for_shared_library=true
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
           - os: windows-2025
@@ -44,7 +46,16 @@ jobs:
           NODE_OBSCURA_SKIP_NATIVE_BUILD: "1"
         run: npm ci
 
+      - name: Install Linux V8 source dependencies
+        if: ${{ matrix.v8_from_source == '1' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libclang-dev
+
       - name: Build native binding
+        env:
+          V8_FROM_SOURCE: ${{ matrix.v8_from_source }}
+          GN_ARGS: ${{ matrix.v8_gn_args }}
         run: npm run build:native -- --target ${{ matrix.target }}
 
       - name: Test
