@@ -23,7 +23,6 @@
     "obscura-source.json",
     "Cargo.toml",
     "Cargo.lock",
-    "node-obscura.*.node",
     "README.md",
     "LICENSE"
   ],
