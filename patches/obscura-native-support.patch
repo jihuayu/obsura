@@ -1,3 +1,15 @@
+diff --git a/crates/obscura-browser/Cargo.toml b/crates/obscura-browser/Cargo.toml
+index bb88efe3aaa98dc2cc03aa5a803437f749f2ba38..eafe718954d70164fe43c1af263832e9b678ef53 100644
+--- a/crates/obscura-browser/Cargo.toml
++++ b/crates/obscura-browser/Cargo.toml
+@@ -6,6 +6,7 @@ edition.workspace = true
+ [features]
+ default = []
+ stealth = ["obscura-net/stealth"]
++v8-pointer-compression = ["obscura-js/v8-pointer-compression"]
+ 
+ [dependencies]
+ obscura-dom = { workspace = true }
 diff --git a/crates/obscura-browser/src/page.rs b/crates/obscura-browser/src/page.rs
 index 94fb566664edc9e678931b685bce8e28c5e0bda0..939db984fb9900bd4ab5464d5ae6a7b379b7b2cd 100644
 --- a/crates/obscura-browser/src/page.rs
@@ -241,12 +253,17 @@ index a4543064931218430cae0279f9b6f5f22a4e1ef9..22e4d4215219cf8efacc9fa9ed4960ba
 \ No newline at end of file
 +}
 diff --git a/crates/obscura-js/Cargo.toml b/crates/obscura-js/Cargo.toml
-index 5e6eaa2ed794c44dd77ba53c4e0f0edeea2d7eab..7f5ba95b519d30136f36d77ae5df55c6c6154065 100644
+index 5e6eaa2ed794c44dd77ba53c4e0f0edeea2d7eab..3093939b0074e146224067cede6b6e78f67c59fd 100644
 --- a/crates/obscura-js/Cargo.toml
 +++ b/crates/obscura-js/Cargo.toml
-@@ -4,12 +4,12 @@ version.workspace = true
+@@ -3,13 +3,17 @@ name = "obscura-js"
+ version.workspace = true
  edition.workspace = true
  
++[features]
++default = []
++v8-pointer-compression = ["deno_core/v8_enable_pointer_compression"]
++
  [build-dependencies]
 -deno_core = "0.350"
 +deno_core = "0.385"
@@ -259,7 +276,7 @@ index 5e6eaa2ed794c44dd77ba53c4e0f0edeea2d7eab..7f5ba95b519d30136f36d77ae5df55c6
  tokio = { workspace = true }
  serde = { workspace = true }
  serde_json = { workspace = true }
-@@ -19,4 +19,4 @@ thiserror = { workspace = true }
+@@ -19,4 +23,4 @@ thiserror = { workspace = true }
  anyhow = { workspace = true }
  reqwest = { workspace = true }
  html5ever = { workspace = true }
